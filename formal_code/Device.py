@@ -8,27 +8,43 @@ import time
 class Device:
     ID = ''
     SendingClient = None
-    SubcribingClient = None
+    ReceivingClient = None
     SendingTimer = None
     SendingInterval = 1 #second
     RandomMinimum = 50
     RandomMaximum = 150
     RandomIsInt   = False
-    BrokerIP = '127.0.0.1'
-    BrokerPort = 1883
+    SendingIP = '127.0.0.1'
+    SendingPort = 1883
+    ReceivingIP = '127.0.0.1'
+    ReceivingPort = 1883
     ConnectionAlive = 1200
-    #Topic = 'topic/test'
-    Target = None
+    SendingTarget = None
     IsSender = False
     IsReceiver = False
     BatteryDecline= 0.001 #per second
     Battery = 1
     SelfTimer = None
     
-    def __init__(self,ID,target=None):
+    def __init__(self,ID,sendingTarget=None,sendingIP='127.0.0.1',receivingIP='127.0.0.1',sendingPort=1883,receivingPort=1883):
         self.ID = ID
-        self.Target = target
+        self.SendingTarget = sendingTarget
+        self.SendingIP = sendingIP
+        self.SendingPort = sendingPort
+        self.ReceivingIP = receivingIP
+        self.ReceivingPort = receivingPort
         self.SelfTimer = threading.Timer(1,self.selfAction)
+        if(self.IsSender):
+            self.SendingClient = mqtt.Client(self.ID)
+            self.SendingClient.connect(self.SendingIP,self.SendingPort,self.ConnectionAlive)
+        if(self.IsReceiver):
+            if(self.SendingIP == self.ReceivingIP and self.SendingPort == self.ReceivingPort):
+                self.ReceivingClient = self.SendingClient
+            else:
+                self.ReceivingClient = mqtt.Client(self.ID)
+                self.ReceivingClient.connect(self.ReceivingIP,self.ReceivingPort,self.ConnectionAlive)
+            self.ReceivingClient.on_connect = self.on_connect
+            self.ReceivingClient.on_message = self.on_message
 
     def selfAction(self):
         self.Battery -= self.BatterDecline
@@ -36,18 +52,6 @@ class Device:
             self.stop()
         else:
             self.SelfTimer = threading.Timer(1,self.selfAction)        
-
-    def startSendingTimer(self):
-        if (elf.SendingTimer == None):
-            print('The timer needs to be set.')
-        else:
-            self.SendingTimer.start()
-
-    def cancelSendingTimer(self):
-        if (self.SendingTimer == None):
-            print('The timer needs to be set.')
-        else:
-            self.PulishingTimer.cancel()
             
     def run(self):
         self.runSending()
@@ -55,18 +59,12 @@ class Device:
 
     def runSending(self):
         if(self.IsSender):
-            print('Sending to ',self.Target)
-            self.SendingClient = mqtt.Client(self.ID)
-            self.SendingClient.connect(self.BrokerIP,self.BrokerPort,self.ConnectionAlive)
+            print('Sending to ',self.SendingTarget,'.')
             self.refreshSendingTimer()
 
     def runReceiving(self):
         if(self.IsReceiver):
-            print('Receiving ',self.ID)
-            self.ReceivingClient = mqtt.Client(self.ID)
-            self.ReceivingClient.connect(self.BrokerIP,self.BrokerPort,self.ConnectionAlive)
-            self.ReceivingClient.on_connect = self.on_connect
-            self.ReceivingClient.on_message = self.on_message
+            print(self.ID,' is receiving.')
             self.ReceivingClient.loop_start()
 
     def refreshSendingTimer(self):
@@ -76,9 +74,9 @@ class Device:
     def stop(self):
         if(self.SendingClient != None):
             self.SendingClient.disconnect()
-        if(self.SubscrbingClient != None):
+        if(self.ReceivingClient != None):
             self.ReceivingClient.loop_stop()
-            self.SubscrbingClient.disconnect()
+            self.ReceivingClient.disconnect()
         if(self.SendingTimer != None):
             self.SendingTimer.cancel()
         if(self.SelfTimer != None):
@@ -87,8 +85,8 @@ class Device:
     def SendingAction(self):
         if(self.IsSender):
             jsonString = self.createJSONString()
-            print('To '+self.Target+':'+jsonString)
-            self.SendingClient.publish(self.Target, jsonString)
+            print('To '+self.SendingTarget+':'+jsonString)
+            self.SendingClient.publish(self.SendingTarget, jsonString)
         self.refreshSendingTimer()
 
     def printID(self):
@@ -103,18 +101,17 @@ class Device:
 
     def on_connect(self,client, userdata, flags, rc):
         print("Connected with result code "+str(rc))
-        self.ReceivingClient.subscribe(self.ID)
+        if(self.IsReceiver):
+            self.ReceivingClient.subscribe(self.ID)
 
     def on_message(self,client, userdata, message):
         jsonString = message.payload.decode()
         #print(jsonString)
         content = json.loads(jsonString)
-        #print(message.topic+'-'+content['ID']+':'+content['MESSAGE']+' '+content['TIME'])
         print('From '+content['ID']+':'+str(content['VALUE'])+' '+content['TIME'])
 
     def createJSONString(self):
         data = self.getRandomNumber()
         time = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-        #time = datetime.now()
         jsonString = '{"ID":"'+self.ID+'","VALUE":'+str(data)+',"BATTERY":'+str(self.Battery)+',"TIME":"'+time+'"}'
         return jsonString

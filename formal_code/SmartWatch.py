@@ -10,8 +10,4 @@ class SmartWatch(Device):
     IsReceiver    = True
 
 a = SmartWatch('SW1','SP1')
-#a.run()
-a.runReceiving()
-time.sleep(5)
-print('send')
-a.runSending()
+a.run()
