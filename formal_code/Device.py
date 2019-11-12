@@ -20,11 +20,13 @@ class Device:
     ReceivingPort = 1883
     ConnectionAlive = 1200
     SendingTarget = None
+    SendingValue = 0
     IsSender = False
     IsReceiver = False
     BatteryDecline= 0.001 #per second
-    Battery = 1
+    BatteryRemaining = 1.0
     SelfTimer = None
+    StoredData = []
     
     def __init__(self,ID,sendingTarget=None,sendingIP='127.0.0.1',receivingIP='127.0.0.1',sendingPort=1883,receivingPort=1883):
         self.ID = ID
@@ -33,7 +35,6 @@ class Device:
         self.SendingPort = sendingPort
         self.ReceivingIP = receivingIP
         self.ReceivingPort = receivingPort
-        self.SelfTimer = threading.Timer(1,self.selfAction)
         if(self.IsSender):
             self.SendingClient = mqtt.Client(self.ID)
             self.SendingClient.connect(self.SendingIP,self.SendingPort,self.ConnectionAlive)
@@ -46,23 +47,20 @@ class Device:
             self.ReceivingClient.on_connect = self.on_connect
             self.ReceivingClient.on_message = self.on_message
 
-    def selfAction(self):
-        self.Battery -= self.BatterDecline
-        if(self.Battery <= 0):
+    def refreshSelf(self):
+        self.BatteryRemaining -= self.BatteryDecline
+        self.refreshSendingValue(1)
+        if(self.BatteryRemaining <= 0):
             self.stop()
         else:
-            self.SelfTimer = threading.Timer(1,self.selfAction)        
+            self.SelfTimer = threading.Timer(1,self.refreshSelf)
+            self.SelfTimer.start()
             
     def run(self):
-        self.runSending()
-        self.runReceiving()
-
-    def runSending(self):
+        self.refreshSelf()
         if(self.IsSender):
             print('Sending to ',self.SendingTarget,'.')
             self.refreshSendingTimer()
-
-    def runReceiving(self):
         if(self.IsReceiver):
             print(self.ID,' is receiving.')
             self.ReceivingClient.loop_start()
@@ -92,12 +90,12 @@ class Device:
     def printID(self):
         print(self.ID)
 
-    def getRandomNumber(self):
-        if(self.RandomIsInt==True):
-            value = random.randint(self.RandomMinimum,self.RandomMaximum)
-        else:
-            value = self.RandomMinimum + random.random()*(self.RandomMaximum-self.RandomMinimum)
-        return value
+    def refreshSendingValue(self,method):
+        if(method==1):
+            if(self.RandomIsInt==True):
+                self.SendingValue = random.randint(self.RandomMinimum,self.RandomMaximum)
+            else:
+                self.SendingValue = self.RandomMinimum + random.random()*(self.RandomMaximum-self.RandomMinimum)
 
     def on_connect(self,client, userdata, flags, rc):
         print("Connected with result code "+str(rc))
@@ -108,10 +106,9 @@ class Device:
         jsonString = message.payload.decode()
         #print(jsonString)
         content = json.loads(jsonString)
-        print('From '+content['ID']+':'+str(content['VALUE'])+' '+content['TIME'])
+        print('From '+content['id']+':'+str(content['sending_value'])+' '+str(content['battery_remaining'])+content['sending_time'])
 
     def createJSONString(self):
-        data = self.getRandomNumber()
         time = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-        jsonString = '{"ID":"'+self.ID+'","VALUE":'+str(data)+',"BATTERY":'+str(self.Battery)+',"TIME":"'+time+'"}'
+        jsonString = '{"id":"'+self.ID+'","sending_value":'+str(self.SendingValue)+',"battery_remaining":'+str(self.BatteryRemaining)+',"sending_time":"'+time+'"}'
         return jsonString
