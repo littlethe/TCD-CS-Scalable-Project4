@@ -2,16 +2,16 @@ from Device import Device
 import time
 
 class SmartWatch(Device):
-    SendingInterval = 3
-    RandomMinimum = 0
-    RandomMaximum = 5
+    SendingInterval = 2
+    RandomMinimum = 10
+    RandomMaximum = 50
     RandomIsInt   = False
     IsSender      = True
     IsReceiver    = True
 
-a = SmartWatch('SW1','SP1')
+
+a = SmartWatch('SP1','SW1')
 #a.run()
 a.runReceiving()
 time.sleep(5)
-print('send')
 a.runSending()
