@@ -36,10 +36,3 @@ class SmartWatch(Device):
     RandomIsInt   = False
     IsSender      = True
     IsReceiver    = True
-
-class BloodPressureSensor(Device):
-    SendingInterval = 15
-    RandomMinimum = 70
-    RandomMaximum = 180
-    RandomIsInt   = False
-    IsSender      = True
